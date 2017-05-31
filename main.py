@@ -1,3 +1,7 @@
+"""""""""
+Pytorch implementation of Curiosity-driven Exploration by Self-supervised Prediction (https://pathak22.github.io/noreward-rl/resources/icml17.pdf).
+Source code is heavily based on ikostrikov's A3C (https://github.com/ikostrikov/pytorch-a3c/blob/master/LICENSE.md)
+"""""""""
 from __future__ import print_function
 
 import argparse
