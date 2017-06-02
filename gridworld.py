@@ -36,11 +36,11 @@ class gameEnv():
         hero = gameOb((0,0) ,1,1,2,None,'hero')
         self.objects.append(hero)
 
-        #bug = gameOb(self.newPosition(),1,1,1,1,'goal')
-        #self.objects.append(bug)
-
-        bug = gameOb((self.sizeX-1, self.sizeY-1) ,1,1,1,1,'goal')
+        bug = gameOb(self.newPosition(),1,1,1,1,'goal')
         self.objects.append(bug)
+
+        #bug = gameOb((self.sizeX-1, self.sizeY-1) ,1,1,1,1,'goal')
+        #self.objects.append(bug)
 
         #bug = gameOb((self.sizeX, self.sizeY) ,1,1,1,1,'goal')
         #self.objects.append(bug)
@@ -60,7 +60,14 @@ class gameEnv():
         self.objects.append(hole3)
         hole4 = gameOb(self.newPosition(),1,1,0,-1,'fire')
         self.objects.append(hole4)
-
+        hole5 = gameOb(self.newPosition(),1,1,0,-1,'fire')
+        self.objects.append(hole5)
+        hole6 = gameOb(self.newPosition(),1,1,0,-1,'fire')
+        self.objects.append(hole6)
+        hole7 = gameOb(self.newPosition(),1,1,0,-1,'fire')
+        self.objects.append(hole7)
+        hole8 = gameOb(self.newPosition(),1,1,0,-1,'fire')
+        self.objects.append(hole8)
 
         '''
         hero = gameOb((0,0),1,1,2,None,'hero')
