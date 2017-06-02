@@ -34,18 +34,38 @@ def weights_init(m):
 
 class ActorCritic(torch.nn.Module):
     
-    def __init__(self, num_inputs, action_space):
+    def __init__(self):
         super(ActorCritic, self).__init__()
+        num_inputs = 3
         self.conv1 = nn.Conv2d(num_inputs, 32, 3, stride=2, padding=1)
         self.conv2 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
         self.conv3 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
         self.conv4 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
+        #self.lstm = nn.LSTMCell(32 * 3 * 3, 256)
 
-        self.lstm = nn.LSTMCell(32 * 3 * 3, 256)
+        # See - Q Network defn in https://github.com/awjuliani/DeepRL-Agents/blob/master/Double-Dueling-DQN.ipynb
+        '''
+        self.conv1 = nn.Conv2d(3, 32, 8, stride=4, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, 4, stride=2, padding=1)
+        self.conv3 = nn.Conv2d(64, 64, 3, stride=1, padding=1)
+        self.conv4 = nn.Conv2d(64, 8, 7, stride=1, padding=1)
+        '''
+        num_cnn_out = 8*6*6
 
-        num_outputs = action_space.n
-        self.critic_linear = nn.Linear(256, 1)
-        self.actor_linear = nn.Linear(256, num_outputs)
+        self.lstm = nn.LSTMCell(num_cnn_out, 256)
+
+        #num_outputs = 3 # action_space.n
+        num_outputs = 4 # action_space.n
+        ########################
+        self.critic_linear1 = nn.Linear(288, 256)
+        self.actor_linear1 = nn.Linear(288, 256)
+
+        self.critic_linear2 = nn.Linear(256, 1)
+        self.actor_linear2 = nn.Linear(256, num_outputs)
+
+        ########################
+        #self.critic_linear = nn.Linear(256, 1)
+        #self.actor_linear = nn.Linear(256, num_outputs)
 
         ################################################################
         self.icm_conv1 = nn.Conv2d(num_inputs, 32, 3, stride=2, padding=1)
@@ -53,13 +73,21 @@ class ActorCritic(torch.nn.Module):
         self.icm_conv3 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
         self.icm_conv4 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
 
+        '''
+        self.icm_conv1 = nn.Conv2d(3, 32, 8, stride=4, padding=1)
+        self.icm_conv2 = nn.Conv2d(32, 64, 4, stride=2, padding=1)
+        self.icm_conv3 = nn.Conv2d(64, 64, 3, stride=1, padding=1)
+        self.icm_conv4 = nn.Conv2d(64, 8, 7, stride=1, padding=1)
+        '''
         #self.icm_lstm = nn.LSTMCell(32 * 3 * 3, 256)
 
-        self.inverse_linear1 = nn.Linear(288 + 288, 256)
+        num_cnn_out = 8*6*6
+
+        self.inverse_linear1 = nn.Linear(num_cnn_out + num_cnn_out, 256)
         self.inverse_linear2 = nn.Linear(256, num_outputs)
 
-        self.forward_linear1 = nn.Linear(288 + num_outputs, 256)
-        self.forward_linear2 = nn.Linear(256, 288)
+        self.forward_linear1 = nn.Linear(num_cnn_out + num_outputs, 256)
+        self.forward_linear2 = nn.Linear(256, num_cnn_out)
 
 
         #self.inverse_linear1 = nn.Linear(256 + 256, 256)
@@ -91,7 +119,22 @@ class ActorCritic(torch.nn.Module):
         '''
         ################################################################
 
+        self.actor_linear1.weight.data = normalized_columns_initializer(
+            self.actor_linear1.weight.data, 0.01)
+        self.actor_linear1.bias.data.fill_(0)
+        self.critic_linear1.weight.data = normalized_columns_initializer(
+            self.critic_linear1.weight.data, 1.0)
+        self.critic_linear1.bias.data.fill_(0)
 
+        self.actor_linear2.weight.data = normalized_columns_initializer(
+            self.actor_linear2.weight.data, 0.01)
+        self.actor_linear2.bias.data.fill_(0)
+        self.critic_linear2.weight.data = normalized_columns_initializer(
+            self.critic_linear2.weight.data, 1.0)
+        self.critic_linear2.bias.data.fill_(0)
+
+
+        '''
         self.actor_linear.weight.data = normalized_columns_initializer(
             self.actor_linear.weight.data, 0.01)
         self.actor_linear.bias.data.fill_(0)
@@ -101,7 +144,7 @@ class ActorCritic(torch.nn.Module):
 
         self.lstm.bias_ih.data.fill_(0)
         self.lstm.bias_hh.data.fill_(0)
-
+        '''
         self.train()
 
 
@@ -109,21 +152,50 @@ class ActorCritic(torch.nn.Module):
 
         if icm == False:
             """A3C"""
-            inputs, (a3c_hx, a3c_cx) = inputs
+
+            inputs = inputs.permute(2,0,1) # permute from (84,84,3) to (3,84,84)
+            inputs = inputs.unsqueeze(0).float()
 
             x = F.elu(self.conv1(inputs))
             x = F.elu(self.conv2(x))
             x = F.elu(self.conv3(x))
             x = F.elu(self.conv4(x))
 
-            x = x.view(-1, 32 * 3 * 3)
+            num_cnn_out = 8*6*6
+
+            x = x.view(-1, num_cnn_out)
+            #a3c_hx, a3c_cx = self.lstm(x, (a3c_hx, a3c_cx))
+            #x = a3c_hx
+
+            critic = self.critic_linear1(x)
+            actor = self.actor_linear1(x)
+            critic = self.critic_linear2(critic)
+            actor = self.actor_linear2(actor)
+            
+            return critic, actor
+
+
+            '''
+            inputs, (a3c_hx, a3c_cx) = inputs
+
+            inputs = inputs.permute(2,0,1) # permute from (84,84,3) to (3,84,84)
+            inputs = inputs.unsqueeze(0).float()
+
+            x = F.elu(self.conv1(inputs))
+            x = F.elu(self.conv2(x))
+            x = F.elu(self.conv3(x))
+            x = F.elu(self.conv4(x))
+
+            num_cnn_out = 8*6*6
+
+            x = x.view(-1, num_cnn_out)
             a3c_hx, a3c_cx = self.lstm(x, (a3c_hx, a3c_cx))
             x = a3c_hx
 
             critic = self.critic_linear(x)
             actor = self.actor_linear(x)
             return critic, actor, (a3c_hx, a3c_cx)
-
+            '''
         else:
             """icm"""
             s_t, s_t1, a_t = inputs
@@ -131,18 +203,26 @@ class ActorCritic(torch.nn.Module):
             s_t, (icm_hx, icm_cx) = s_t
             s_t1, (icm_hx1, icm_cx1) = s_t1
             '''
+            s_t = s_t.permute(2,0,1)
+            s_t = s_t.unsqueeze(0).float()
+
             vec_st = F.elu(self.icm_conv1(s_t))
             vec_st = F.elu(self.icm_conv2(vec_st))
             vec_st = F.elu(self.icm_conv3(vec_st))
             vec_st = F.elu(self.icm_conv4(vec_st))
+
+            s_t1 = s_t1.permute(2,0,1)
+            s_t1 = s_t1.unsqueeze(0).float()
 
             vec_st1 = F.elu(self.icm_conv1(s_t1))
             vec_st1 = F.elu(self.icm_conv2(vec_st1))
             vec_st1 = F.elu(self.icm_conv3(vec_st1))
             vec_st1 = F.elu(self.icm_conv4(vec_st1))
 
-            vec_st = vec_st.view(-1, 32 * 3 * 3)
-            vec_st1 = vec_st1.view(-1, 32 * 3 * 3)
+            num_cnn_out = 8*6*6
+
+            vec_st = vec_st.view(-1, num_cnn_out)
+            vec_st1 = vec_st1.view(-1, num_cnn_out)
 
             #icm_hx, icm_cx = self.icm_lstm(vec_st, (icm_hx, icm_cx))
             #icm_hx1, icm_cx1 = self.icm_lstm(vec_st1, (icm_hx1, icm_cx1))

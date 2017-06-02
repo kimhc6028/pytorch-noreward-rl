@@ -8,7 +8,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import env_wrapper
+#import env_wrapper
+from gridworld import gameEnv
+#from envs import create_atari_env
 from model import ActorCritic
 from torch.autograd import Variable
 from torchvision import datasets, transforms
@@ -29,9 +31,15 @@ def train(rank, args, shared_model, optimizer=None):
 
     torch.manual_seed(args.seed + rank)
 
-    env = env_wrapper.create_doom(args.record, outdir=args.outdir)
-    num_outputs = env.action_space.n
-    model = ActorCritic(env.observation_space.shape[0], env.action_space)
+    #env = env_wrapper.create_doom(args.record, outdir=args.outdir)
+    #env = create_atari_env(args.env_name)
+    env = gameEnv(partial=False,size=args.size)
+
+    #num_outputs = 3#env.action_space.n
+    num_outputs = 4#env.action_space.n
+
+    model = ActorCritic()
+    #model = ActorCritic(env.observation_space.shape[0], env.action_space)
 
     if optimizer is None:
         optimizer = optim.Adam(shared_model.parameters(), lr=args.lr)
@@ -65,10 +73,10 @@ def train(rank, args, shared_model, optimizer=None):
         vec_st1s = []
 
         for step in range(args.num_steps):
-            value, logit, (hx, cx) = model(
-                (Variable(state.unsqueeze(0)), (hx, cx)),
-                icm = False
-            )
+            #value, logit, (hx, cx) = model((Variable(state.unsqueeze(0)), (hx, cx)), icm = False )
+            #value, logit, (hx, cx) = model((Variable(state), (hx, cx)), icm=False)
+            value, logit = model(Variable(state), icm=False)
+
             s_t = state
             prob = F.softmax(logit)
             log_prob = F.log_softmax(logit)
@@ -85,25 +93,24 @@ def train(rank, args, shared_model, optimizer=None):
             a_t = oh_action
             actions.append(oh_action)
 
-            state, reward, done, _ = env.step(action.numpy()[0][0])
+            #state, reward, done, _ = env.step(action.numpy()[0][0])
+            state, reward, done = env.step(action.numpy()[0][0])
+            #print('prob',prob)
+            #print('action',action.numpy()[0][0], 'reward',reward)
+            
             state = torch.from_numpy(state)
 
             done = done or episode_length >= args.max_episode_length
             reward = max(min(reward, 1), -1)
             s_t1 = state
-            vec_st1, inverse, forward = model(
-                (
-                    Variable(s_t.unsqueeze(0)),
-                    Variable(s_t1.unsqueeze(0)),
-                    a_t
-                ),
-                icm = True
-            )            
+            #vec_st1, inverse, forward = model((Variable(s_t.unsqueeze(0)), Variable(s_t1.unsqueeze(0)), a_t ), icm = True )
+            vec_st1, inverse, forward = model((Variable(s_t), Variable(s_t1), a_t ), icm = True )            
+
 
             reward_intrinsic = args.eta * ((vec_st1 - forward).pow(2)).sum(1) / 2.
             #reward_intrinsic = args.eta * ((vec_st1 - forward).pow(2)).sum(1).sqrt() / 2.
             reward_intrinsic = reward_intrinsic.data.numpy()[0][0]
-            reward += reward_intrinsic
+            #reward += reward_intrinsic
 
             if done:
                 episode_length = 0
@@ -121,10 +128,9 @@ def train(rank, args, shared_model, optimizer=None):
 
         R = torch.zeros(1, 1)
         if not done:
-            value, _, _ = model(
-                (Variable(state.unsqueeze(0)), (hx, cx)),
-                icm = False
-            )
+            #value, _, _ = model((Variable(state.unsqueeze(0)), (hx, cx)), icm = False )
+            #value, _, _ = model((Variable(state), (hx, cx)), icm = False )
+            value, _ = model(Variable(state), icm = False )
             R = value.data
 
         values.append(Variable(R))
@@ -156,7 +162,7 @@ def train(rank, args, shared_model, optimizer=None):
 
         optimizer.zero_grad()
 
-        ((1-args.beta) * inverse_loss + args.beta * forward_loss).backward(retain_variables=True)
+        #((1-args.beta) * inverse_loss + args.beta * forward_loss).backward(retain_variables=True)
         (args.lmbda * (policy_loss + 0.5 * value_loss)).backward()
 
         #(((1-args.beta) * inverse_loss + args.beta * forward_loss) + args.lmbda * (policy_loss + 0.5 * value_loss)).backward()
