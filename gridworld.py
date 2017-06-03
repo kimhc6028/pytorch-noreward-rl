@@ -1,3 +1,7 @@
+'''
+Source code is heavily based on awjuliani/DeepRL-Agents (https://github.com/awjuliani/DeepRL-Agents/blob/master/LICENSE)
+'''
+
 import numpy as np
 import random
 import itertools
